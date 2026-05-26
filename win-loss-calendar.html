@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#0f0f0f" />
+  <link rel="manifest" href="manifest.json" />
+  <title>勝ち負けカレンダー</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+    :root {
+      --bg: #0f0f0f;
+      --surface: #1a1a1a;
+      --surface2: #242424;
+      --border: #2e2e2e;
+      --text: #f0f0f0;
+      --text-sub: #888;
+      --win: #4ade80;
+      --win-bg: #052e16;
+      --loss: #f87171;
+      --loss-bg: #2d0a0a;
+      --accent: #6366f1;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Noto Sans JP', sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .app { width:100%; max-width:430px; padding:0 0 100px 0; }
+
+    /* ヘッダー */
+    .header {
+      padding: 56px 20px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .header h1 { font-size:22px; font-weight:700; letter-spacing:-0.5px; }
+    .header-stats { display:flex; gap:12px; font-size:13px; color:var(--text-sub); }
+    .stat-win { color:var(--win); font-weight:600; }
+    .stat-loss { color:var(--loss); font-weight:600; }
+
+    /* ストリーク */
+    .streak-bar {
+      margin: 0 16px 16px;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      border: 1px solid #2a2a4a;
+      border-radius: 14px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .streak-fire { font-size: 24px; line-height:1; }
+    .streak-text { flex:1; }
+    .streak-count { font-size:18px; font-weight:800; color:#fff; line-height:1; }
+    .streak-label { font-size:11px; color:#8888cc; margin-top:2px; }
+    .streak-bar.hidden { display:none; }
+
+    /* 今日の記録 */
+    .today-card {
+      margin: 0 16px 20px;
+      background: var(--surface);
+      border-radius: 20px;
+      padding: 20px;
+      border: 1px solid var(--border);
+    }
+    .today-label { font-size:12px; color:var(--text-sub); font-weight:500; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:4px; }
+    .today-date { font-size:18px; font-weight:700; margin-bottom:16px; }
+
+    .btn-group { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+    .btn-win, .btn-loss {
+      padding:16px; border-radius:14px; border:2px solid transparent;
+      font-size:18px; font-weight:700; cursor:pointer;
+      transition:all 0.15s ease;
+      display:flex; flex-direction:column; align-items:center; gap:4px;
+    }
+    .btn-win  { background:var(--win-bg);  color:var(--win);  border-color:#0a4a20; }
+    .btn-loss { background:var(--loss-bg); color:var(--loss); border-color:#4a1010; }
+    .btn-win.active  { background:var(--win);  color:#fff; border-color:var(--win);  box-shadow:0 0 20px rgba(74,222,128,0.3); }
+    .btn-loss.active { background:var(--loss); color:#fff; border-color:var(--loss); box-shadow:0 0 20px rgba(248,113,113,0.3); }
+    .btn-win:active, .btn-loss:active { transform:scale(0.97); }
+    .btn-sub { font-size:11px; font-weight:500; opacity:0.7; }
+
+    .memo-area { display:flex; align-items:center; gap:10px; }
+    .memo-input {
+      flex:1; background:var(--surface2); border:1px solid var(--border);
+      border-radius:10px; padding:10px 14px; color:var(--text);
+      font-size:14px; font-family:inherit; outline:none; transition:border-color 0.15s;
+    }
+    .memo-input::placeholder { color:var(--text-sub); }
+    .memo-input:focus { border-color:var(--accent); }
+    .save-btn {
+      background:var(--accent); color:#fff; border:none; border-radius:10px;
+      padding:10px 16px; font-size:13px; font-weight:600; cursor:pointer;
+      font-family:inherit; transition:opacity 0.15s, transform 0.1s; white-space:nowrap;
+    }
+    .save-btn:active { transform:scale(0.96); opacity:0.85; }
+    .save-btn:disabled { opacity:0.3; cursor:not-allowed; }
+
+    .share-area { margin-top:12px; display:none; }
+    .share-area.visible { display:block; }
+    .share-btn {
+      width:100%; padding:12px; border-radius:12px; border:none;
+      background:#000; color:#fff; font-size:14px; font-weight:600;
+      cursor:pointer; font-family:inherit;
+      display:flex; align-items:center; justify-content:center; gap:8px;
+      transition:opacity 0.15s, transform 0.1s;
+    }
+    .share-btn:active { transform:scale(0.97); opacity:0.85; }
+    .x-logo { width:16px; height:16px; fill:#fff; }
+
+    /* 月間サマリー */
+    .summary { margin:0 16px 0; display:flex; gap:10px; }
+    .summary-card { flex:1; background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px; text-align:center; }
+    .summary-num { font-size:26px; font-weight:800; line-height:1; margin-bottom:4px; }
+    .summary-label { font-size:11px; color:var(--text-sub); font-weight:500; }
+    .win-num { color:var(--win); }
+    .loss-num { color:var(--loss); }
+    .rate-num { color:var(--text); }
+
+    /* カレンダーナビ */
+    .calendar-nav { display:flex; align-items:center; justify-content:space-between; padding:0 20px; margin-top:20px; margin-bottom:12px; }
+    .month-label { font-size:17px; font-weight:700; }
+    .nav-btn {
+      background:var(--surface); border:1px solid var(--border); color:var(--text);
+      border-radius:8px; width:34px; height:34px;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; font-size:16px; transition:background 0.15s;
+    }
+    .nav-btn:active { background:var(--surface2); }
+
+    /* カレンダー */
+    .calendar { margin:0 16px; background:var(--surface); border-radius:20px; overflow:hidden; border:1px solid var(--border); }
+    .weekdays { display:grid; grid-template-columns:repeat(7,1fr); padding:14px 10px 8px; }
+    .weekday { text-align:center; font-size:11px; font-weight:600; color:var(--text-sub); letter-spacing:0.3px; }
+    .weekday:first-child { color:#f87171; }
+    .weekday:last-child  { color:#60a5fa; }
+    .days { display:grid; grid-template-columns:repeat(7,1fr); padding:4px 10px 14px; gap:4px; }
+    .day {
+      aspect-ratio:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+      border-radius:10px; cursor:pointer; position:relative; transition:background 0.1s; gap:2px;
+    }
+    .day:active { transform:scale(0.93); }
+    .day.empty { cursor:default; }
+    .day.other-month .day-num { color:var(--border); }
+    .day-num { font-size:13px; font-weight:600; color:var(--text-sub); line-height:1; }
+    .day.today .day-num { color:var(--text); }
+    .day.today::after { content:''; position:absolute; bottom:5px; width:4px; height:4px; border-radius:50%; background:var(--accent); }
+    .day.win  { background:var(--win-bg);  }
+    .day.win  .day-num { color:var(--win); }
+    .day.loss { background:var(--loss-bg); }
+    .day.loss .day-num { color:var(--loss); }
+    .day-dot { font-size:9px; line-height:1; }
+
+    /* グラフセクション */
+    .graph-section { margin:20px 16px 0; }
+    .graph-tabs { display:flex; gap:8px; margin-bottom:12px; }
+    .graph-tab {
+      flex:1; padding:9px; border-radius:10px; border:1px solid var(--border);
+      background:var(--surface); color:var(--text-sub); font-size:13px; font-weight:600;
+      cursor:pointer; font-family:inherit; transition:all 0.15s;
+    }
+    .graph-tab.active { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .graph-wrap {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:20px; padding:16px 16px 12px;
+    }
+    .graph-title { font-size:12px; color:var(--text-sub); font-weight:500; margin-bottom:14px; letter-spacing:0.3px; text-transform:uppercase; }
+    .bars { display:flex; align-items:flex-end; gap:6px; height:80px; }
+    .bar-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:4px; height:100%; justify-content:flex-end; }
+    .bar-track { width:100%; background:var(--surface2); border-radius:4px; overflow:hidden; display:flex; flex-direction:column; justify-content:flex-end; }
+    .bar-fill { width:100%; border-radius:4px; transition:height 0.4s ease; }
+    .bar-fill.win-fill  { background:var(--win); }
+    .bar-fill.loss-fill { background:var(--loss); }
+    .bar-fill.empty-fill { background:var(--border); height:4px !important; }
+    .bar-label { font-size:10px; color:var(--text-sub); white-space:nowrap; }
+    .bar-pct { font-size:10px; font-weight:700; }
+    .bar-pct.win-pct  { color:var(--win); }
+    .bar-pct.loss-pct { color:var(--loss); }
+    .bar-pct.empty-pct { color:var(--text-sub); }
+
+    /* ポップアップ */
+    .overlay {
+      position:fixed; inset:0; background:rgba(0,0,0,0.7);
+      display:flex; align-items:flex-end; justify-content:center;
+      z-index:100; opacity:0; pointer-events:none; transition:opacity 0.2s;
+    }
+    .overlay.show { opacity:1; pointer-events:all; }
+    .popup {
+      background:var(--surface); border-radius:24px 24px 0 0; padding:24px 24px 48px;
+      width:100%; max-width:430px; border:1px solid var(--border);
+      transform:translateY(20px); transition:transform 0.2s;
+    }
+    .overlay.show .popup { transform:translateY(0); }
+    .popup-date   { font-size:14px; color:var(--text-sub); margin-bottom:12px; }
+    .popup-result { font-size:28px; font-weight:800; margin-bottom:12px; }
+    .popup-result.win  { color:var(--win); }
+    .popup-result.loss { color:var(--loss); }
+    .popup-memo    { font-size:15px; color:var(--text); line-height:1.6; background:var(--surface2); padding:12px 16px; border-radius:10px; margin-bottom:16px; }
+    .popup-no-memo { font-size:14px; color:var(--text-sub); margin-bottom:16px; }
+    .popup-actions { display:flex; gap:10px; }
+    .popup-close {
+      flex:1; padding:13px; background:var(--surface2); border:1px solid var(--border);
+      border-radius:12px; color:var(--text); font-size:14px; font-weight:600;
+      cursor:pointer; font-family:inherit;
+    }
+    .popup-share {
+      padding:13px 18px; background:#000; border:none; border-radius:12px;
+      color:#fff; font-size:14px; font-weight:600; cursor:pointer; font-family:inherit;
+      display:flex; align-items:center; gap:6px;
+    }
+    .popup-delete {
+      padding:13px 18px; background:var(--loss-bg); border:1px solid #4a1010;
+      border-radius:12px; color:var(--loss); font-size:14px; font-weight:600;
+      cursor:pointer; font-family:inherit;
+    }
+
+    /* トースト */
+    .toast {
+      position:fixed; bottom:24px; left:50%;
+      transform:translateX(-50%) translateY(20px);
+      background:var(--surface); border:1px solid var(--border);
+      color:var(--text); padding:12px 20px; border-radius:12px;
+      font-size:14px; font-weight:500; z-index:200;
+      opacity:0; transition:all 0.25s; white-space:nowrap;
+    }
+    .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+
+    /* 紙吹雪キャンバス */
+    #confetti-canvas {
+      position:fixed; inset:0; pointer-events:none; z-index:300;
+    }
+  </style>
+</head>
+<body>
+<canvas id="confetti-canvas"></canvas>
+
+<div class="app">
+  <div class="header">
+    <h1>勝ち負けカレンダー</h1>
+    <div class="header-stats">
+      <span>総計 <span class="stat-win" id="total-win">0</span>勝</span>
+      <span><span class="stat-loss" id="total-loss">0</span>敗</span>
+    </div>
+  </div>
+
+  <!-- ストリーク -->
+  <div class="streak-bar hidden" id="streak-bar">
+    <div class="streak-fire">🔥</div>
+    <div class="streak-text">
+      <div class="streak-count" id="streak-count">0</div>
+      <div class="streak-label">日連続記録中</div>
+    </div>
+  </div>
+
+  <!-- 今日の記録 -->
+  <div class="today-card">
+    <div class="today-label">Today</div>
+    <div class="today-date" id="today-label"></div>
+    <div class="btn-group">
+      <button class="btn-win"  id="btn-win"  onclick="setToday('win')">⚔️<span>勝ち</span><span class="btn-sub">WIN</span></button>
+      <button class="btn-loss" id="btn-loss" onclick="setToday('loss')">🛡️<span>負け</span><span class="btn-sub">LOSS</span></button>
+    </div>
+    <div class="memo-area">
+      <input class="memo-input" id="memo-input" type="text" placeholder="一言メモ（任意）" maxlength="50" />
+      <button class="save-btn" id="save-btn" onclick="saveToday()" disabled>保存</button>
+    </div>
+    <div class="share-area" id="share-area">
+      <button class="share-btn" onclick="shareToX()">
+        <svg class="x-logo" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        今日の結果をポストする
+      </button>
+    </div>
+  </div>
+
+  <!-- 月間サマリー -->
+  <div class="summary">
+    <div class="summary-card"><div class="summary-num win-num"  id="month-win">0</div><div class="summary-label">今月の勝ち</div></div>
+    <div class="summary-card"><div class="summary-num loss-num" id="month-loss">0</div><div class="summary-label">今月の負け</div></div>
+    <div class="summary-card"><div class="summary-num rate-num" id="month-rate">-</div><div class="summary-label">勝率</div></div>
+  </div>
+
+  <!-- カレンダー -->
+  <div class="calendar-nav">
+    <button class="nav-btn" onclick="changeMonth(-1)">‹</button>
+    <div class="month-label" id="month-label"></div>
+    <button class="nav-btn" onclick="changeMonth(1)">›</button>
+  </div>
+  <div class="calendar">
+    <div class="weekdays">
+      <div class="weekday">日</div><div class="weekday">月</div><div class="weekday">火</div>
+      <div class="weekday">水</div><div class="weekday">木</div><div class="weekday">金</div><div class="weekday">土</div>
+    </div>
+    <div class="days" id="calendar-days"></div>
+  </div>
+
+  <!-- グラフ -->
+  <div class="graph-section">
+    <div class="graph-tabs">
+      <button class="graph-tab active" id="tab-week"  onclick="switchGraph('week')">週別</button>
+      <button class="graph-tab"        id="tab-month" onclick="switchGraph('month')">月別</button>
+    </div>
+    <div class="graph-wrap">
+      <div class="graph-title" id="graph-title">直近8週の勝率</div>
+      <div class="bars" id="graph-bars"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 詳細ポップアップ -->
+<div class="overlay" id="overlay" onclick="closePopup(event)">
+  <div class="popup">
+    <div class="popup-date"   id="popup-date"></div>
+    <div class="popup-result" id="popup-result"></div>
+    <div id="popup-memo-wrap"></div>
+    <div class="popup-actions">
+      <button class="popup-close"  onclick="closeOverlay()">閉じる</button>
+      <button class="popup-share"  onclick="sharePopupRecord()">
+        <svg class="x-logo" viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.253 5.622 5.911-5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+      </button>
+      <button class="popup-delete" onclick="deleteRecord()">削除</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const STORAGE_KEY = 'win-loss-records';
+let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+let currentYear, currentMonth;
+let selectedResult = null;
+let popupDateKey = null;
+let graphMode = 'week';
+
+const today = new Date();
+const todayKey = dateKey(today);
+
+// ────────────────────────────────────────────────
+// ユーティリティ
+// ────────────────────────────────────────────────
+function dateKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function formatDateJP(s) {
+  const [y,m,d] = s.split('-');
+  return `${y}年${parseInt(m)}月${parseInt(d)}日`;
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(records)); }
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ────────────────────────────────────────────────
+// 効果音
+// ────────────────────────────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+function getAudioCtx() { if (!audioCtx) audioCtx = new AudioCtx(); return audioCtx; }
+
+function playWinSound() {
+  const ctx = getAudioCtx();
+  [523.25,659.25,783.99,1046.5].forEach((freq,i) => {
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.value = freq;
+    const t = ctx.currentTime + i*0.1;
+    gain.gain.setValueAtTime(0,t);
+    gain.gain.linearRampToValueAtTime(0.25, t+0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, t+0.35);
+    osc.start(t); osc.stop(t+0.35);
+  });
+}
+function playLossSound() {
+  const ctx = getAudioCtx();
+  [392,349.23,311.13].forEach((freq,i) => {
+    const osc = ctx.createOscillator(), gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = 'sine'; osc.frequency.value = freq;
+    const t = ctx.currentTime + i*0.13;
+    gain.gain.setValueAtTime(0,t);
+    gain.gain.linearRampToValueAtTime(0.2, t+0.03);
+    gain.gain.exponentialRampToValueAtTime(0.001, t+0.4);
+    osc.start(t); osc.stop(t+0.4);
+  });
+}
+function playSaveSound() {
+  const ctx = getAudioCtx();
+  const osc = ctx.createOscillator(), gain = ctx.createGain();
+  osc.connect(gain); gain.connect(ctx.destination);
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(600, ctx.currentTime);
+  osc.frequency.linearRampToValueAtTime(900, ctx.currentTime+0.1);
+  gain.gain.setValueAtTime(0.18, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime+0.25);
+  osc.start(ctx.currentTime); osc.stop(ctx.currentTime+0.25);
+}
+
+// ────────────────────────────────────────────────
+// 紙吹雪
+// ────────────────────────────────────────────────
+const canvas = document.getElementById('confetti-canvas');
+const ctx2d   = canvas.getContext('2d');
+let confettiParticles = [];
+let confettiRAF = null;
+
+function launchConfetti() {
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  confettiParticles = [];
+  const colors = ['#4ade80','#86efac','#fde68a','#6366f1','#f9a8d4','#fff'];
+  for (let i = 0; i < 120; i++) {
+    confettiParticles.push({
+      x: Math.random() * canvas.width,
+      y: -10 - Math.random() * 100,
+      w: 6 + Math.random() * 6,
+      h: 3 + Math.random() * 4,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 3,
+      vy: 2 + Math.random() * 4,
+      angle: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 0.2,
+      life: 1,
+    });
+  }
+  if (confettiRAF) cancelAnimationFrame(confettiRAF);
+  animateConfetti();
+}
+
+function animateConfetti() {
+  ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  confettiParticles = confettiParticles.filter(p => p.life > 0);
+  confettiParticles.forEach(p => {
+    p.x += p.vx; p.y += p.vy; p.angle += p.spin;
+    if (p.y > canvas.height * 0.75) p.life -= 0.04;
+    ctx2d.save();
+    ctx2d.globalAlpha = p.life;
+    ctx2d.translate(p.x, p.y);
+    ctx2d.rotate(p.angle);
+    ctx2d.fillStyle = p.color;
+    ctx2d.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+    ctx2d.restore();
+  });
+  if (confettiParticles.length > 0) {
+    confettiRAF = requestAnimationFrame(animateConfetti);
+  } else {
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
+
+// ────────────────────────────────────────────────
+// ストリーク計算
+// ────────────────────────────────────────────────
+function calcStreak() {
+  let streak = 0;
+  const d = new Date(today);
+  while (true) {
+    const k = dateKey(d);
+    if (records[k]) { streak++; d.setDate(d.getDate() - 1); }
+    else break;
+  }
+  return streak;
+}
+
+function updateStreak() {
+  const s = calcStreak();
+  const bar = document.getElementById('streak-bar');
+  if (s >= 2) {
+    document.getElementById('streak-count').textContent = s;
+    bar.classList.remove('hidden');
+  } else {
+    bar.classList.add('hidden');
+  }
+}
+
+// ────────────────────────────────────────────────
+// X シェア
+// ────────────────────────────────────────────────
+function buildShareText(result, memo, dateStr) {
+  const emoji = result === 'win' ? '⚔️' : '🛡️';
+  const label = result === 'win' ? '勝ち' : '負け';
+  const memoText = memo ? `\n「${memo}」` : '';
+  return `${formatDateJP(dateStr)} ${emoji} 今日は${label}！${memoText}\n\n#勝ち負けカレンダー`;
+}
+function openXShare(text) {
+  window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+}
+function shareToX() {
+  const rec = records[todayKey];
+  const result = rec ? rec.result : selectedResult;
+  const memo   = rec ? rec.memo   : document.getElementById('memo-input').value.trim();
+  if (!result) return;
+  openXShare(buildShareText(result, memo, todayKey));
+}
+function sharePopupRecord() {
+  if (!popupDateKey || !records[popupDateKey]) return;
+  const rec = records[popupDateKey];
+  openXShare(buildShareText(rec.result, rec.memo, popupDateKey));
+}
+
+// ────────────────────────────────────────────────
+// PWA
+// ────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+// ────────────────────────────────────────────────
+// 今日エリア
+// ────────────────────────────────────────────────
+function initToday() {
+  const days = ['日','月','火','水','木','金','土'];
+  document.getElementById('today-label').textContent =
+    `${today.getMonth()+1}月${today.getDate()}日（${days[today.getDay()]}）`;
+  const rec = records[todayKey];
+  if (rec) {
+    selectedResult = rec.result;
+    updateTodayButtons();
+    document.getElementById('memo-input').value = rec.memo || '';
+    document.getElementById('share-area').classList.add('visible');
+  }
+  document.getElementById('save-btn').disabled = !selectedResult;
+  document.getElementById('memo-input').addEventListener('input', () => {
+    document.getElementById('save-btn').disabled = !selectedResult;
+  });
+}
+
+function setToday(result) {
+  selectedResult = result;
+  updateTodayButtons();
+  document.getElementById('save-btn').disabled = false;
+  if (result === 'win') playWinSound();
+  else playLossSound();
+}
+
+function updateTodayButtons() {
+  document.getElementById('btn-win').classList.toggle('active',  selectedResult === 'win');
+  document.getElementById('btn-loss').classList.toggle('active', selectedResult === 'loss');
+}
+
+function saveToday() {
+  if (!selectedResult) return;
+  const memo = document.getElementById('memo-input').value.trim();
+  records[todayKey] = { result: selectedResult, memo };
+  save();
+  renderCalendar();
+  updateStats();
+  updateStreak();
+  renderGraph();
+  playSaveSound();
+  if (selectedResult === 'win') launchConfetti();
+  document.getElementById('share-area').classList.add('visible');
+  showToast(selectedResult === 'win' ? '✊ 今日も勝ち！記録しました' : '🛡 負け記録しました。明日も頑張ろう');
+}
+
+// ────────────────────────────────────────────────
+// カレンダー
+// ────────────────────────────────────────────────
+function renderCalendar() {
+  document.getElementById('month-label').textContent = `${currentYear}年${currentMonth+1}月`;
+  const firstDay      = new Date(currentYear, currentMonth, 1).getDay();
+  const daysInMonth   = new Date(currentYear, currentMonth+1, 0).getDate();
+  const daysInPrev    = new Date(currentYear, currentMonth, 0).getDate();
+  const container = document.getElementById('calendar-days');
+  container.innerHTML = '';
+
+  for (let i = firstDay-1; i >= 0; i--) {
+    const d = document.createElement('div');
+    d.className = 'day other-month empty';
+    d.innerHTML = `<span class="day-num">${daysInPrev - i}</span>`;
+    container.appendChild(d);
+  }
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    const rec = records[key];
+    const isToday = key === todayKey;
+    const el = document.createElement('div');
+    el.className = 'day';
+    if (rec) el.classList.add(rec.result);
+    if (isToday) el.classList.add('today');
+    el.innerHTML = `<span class="day-num">${d}</span>${rec && rec.memo ? '<span class="day-dot">💬</span>' : ''}`;
+    if (rec) el.onclick = () => openPopup(key, rec);
+    container.appendChild(el);
+  }
+  updateMonthStats();
+}
+
+function updateMonthStats() {
+  let wins = 0, losses = 0;
+  for (let d = 1; d <= 31; d++) {
+    const key = `${currentYear}-${String(currentMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+    if (records[key]) { records[key].result === 'win' ? wins++ : losses++; }
+  }
+  document.getElementById('month-win').textContent  = wins;
+  document.getElementById('month-loss').textContent = losses;
+  const total = wins + losses;
+  document.getElementById('month-rate').textContent = total > 0 ? Math.round(wins/total*100)+'%' : '-';
+}
+
+function updateStats() {
+  let tw = 0, tl = 0;
+  for (const k in records) { records[k].result === 'win' ? tw++ : tl++; }
+  document.getElementById('total-win').textContent  = tw;
+  document.getElementById('total-loss').textContent = tl;
+  updateMonthStats();
+}
+
+function changeMonth(delta) {
+  currentMonth += delta;
+  if (currentMonth < 0)  { currentMonth = 11; currentYear--; }
+  if (currentMonth > 11) { currentMonth = 0;  currentYear++; }
+  renderCalendar();
+}
+
+// ────────────────────────────────────────────────
+// グラフ
+// ────────────────────────────────────────────────
+function switchGraph(mode) {
+  graphMode = mode;
+  document.getElementById('tab-week').classList.toggle('active',  mode === 'week');
+  document.getElementById('tab-month').classList.toggle('active', mode === 'month');
+  renderGraph();
+}
+
+function renderGraph() {
+  const bars = document.getElementById('graph-bars');
+  bars.innerHTML = '';
+  const data = graphMode === 'week' ? getWeeklyData() : getMonthlyData();
+  document.getElementById('graph-title').textContent =
+    graphMode === 'week' ? '直近8週の勝率' : '直近6ヶ月の勝率';
+
+  data.forEach(item => {
+    const total = item.wins + item.losses;
+    const rate  = total > 0 ? Math.round(item.wins / total * 100) : null;
+    const isWinning = rate !== null && rate >= 50;
+
+    const col = document.createElement('div');
+    col.className = 'bar-col';
+
+    const trackH = 64;
+    const fillH  = rate !== null ? Math.max(4, Math.round(trackH * rate / 100)) : 4;
+
+    col.innerHTML = `
+      <div class="bar-pct ${rate === null ? 'empty-pct' : isWinning ? 'win-pct' : 'loss-pct'}">
+        ${rate !== null ? rate+'%' : ''}
+      </div>
+      <div class="bar-track" style="height:${trackH}px;">
+        <div class="bar-fill ${rate === null ? 'empty-fill' : isWinning ? 'win-fill' : 'loss-fill'}"
+             style="height:${fillH}px;"></div>
+      </div>
+      <div class="bar-label">${item.label}</div>
+    `;
+    bars.appendChild(col);
+  });
+}
+
+function getWeeklyData() {
+  const result = [];
+  for (let w = 7; w >= 0; w--) {
+    const base = new Date(today);
+    base.setDate(base.getDate() - base.getDay() - w * 7);
+    let wins = 0, losses = 0;
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(base);
+      d.setDate(base.getDate() + i);
+      if (d > today) break;
+      const k = dateKey(d);
+      if (records[k]) { records[k].result === 'win' ? wins++ : losses++; }
+    }
+    const m = base.getMonth() + 1;
+    const day = base.getDate();
+    result.push({ label: `${m}/${day}`, wins, losses });
+  }
+  return result;
+}
+
+function getMonthlyData() {
+  const result = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+    const y = d.getFullYear(), m = d.getMonth();
+    const daysInMonth = new Date(y, m+1, 0).getDate();
+    let wins = 0, losses = 0;
+    for (let day = 1; day <= daysInMonth; day++) {
+      const k = `${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+      if (records[k]) { records[k].result === 'win' ? wins++ : losses++; }
+    }
+    result.push({ label: `${m+1}月`, wins, losses });
+  }
+  return result;
+}
+
+// ────────────────────────────────────────────────
+// ポップアップ
+// ────────────────────────────────────────────────
+function openPopup(key, rec) {
+  popupDateKey = key;
+  document.getElementById('popup-date').textContent = formatDateJP(key);
+  const res = document.getElementById('popup-result');
+  res.textContent = rec.result === 'win' ? '⚔️ 勝ち' : '🛡️ 負け';
+  res.className = 'popup-result ' + rec.result;
+  const wrap = document.getElementById('popup-memo-wrap');
+  wrap.innerHTML = rec.memo
+    ? `<div class="popup-memo">${rec.memo}</div>`
+    : `<div class="popup-no-memo">メモなし</div>`;
+  document.getElementById('overlay').classList.add('show');
+}
+function closeOverlay() { document.getElementById('overlay').classList.remove('show'); }
+function closePopup(e)  { if (e.target === document.getElementById('overlay')) closeOverlay(); }
+
+function deleteRecord() {
+  if (!popupDateKey) return;
+  delete records[popupDateKey];
+  save();
+  if (popupDateKey === todayKey) {
+    selectedResult = null;
+    updateTodayButtons();
+    document.getElementById('memo-input').value = '';
+    document.getElementById('save-btn').disabled = true;
+    document.getElementById('share-area').classList.remove('visible');
+  }
+  renderCalendar(); updateStats(); updateStreak(); renderGraph();
+  closeOverlay();
+  showToast('記録を削除しました');
+}
+
+// ────────────────────────────────────────────────
+// 初期化
+// ────────────────────────────────────────────────
+currentYear  = today.getFullYear();
+currentMonth = today.getMonth();
+initToday();
+renderCalendar();
+updateStats();
+updateStreak();
+renderGraph();
+</script>
+</body>
+</html>
