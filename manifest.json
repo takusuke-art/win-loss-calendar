@@ -2,7 +2,7 @@
   "name": "勝ち負けカレンダー",
   "short_name": "勝ち負け",
   "description": "今日は勝ちか負けか。毎日一言で記録するカレンダー",
-  "start_url": "./win-loss-calendar.html",
+　 "start_url": "./"
   "display": "standalone",
   "background_color": "#0f0f0f",
   "theme_color": "#0f0f0f",
